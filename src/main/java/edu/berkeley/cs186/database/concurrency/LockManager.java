@@ -79,33 +79,33 @@ public class LockManager {
          * lock.
          */
         public void grantOrUpdateLock(Lock lock) {
-            // TODO: confusing
             // assumes that the lock is compatible
             // whenever a lock is updated, update both locks and transactionLocks
             if (transactionLocks.containsKey(lock.transactionNum)) {
-                // if transaction is mapped in transactionLocks
-                for (Lock heldLock : transactionLocks.get(lock.transactionNum)) {
-                    // if the transaction already has a lock
-                    if (heldLock.equals(lock)) { // OFFICE HOUR compare name or object itself?
-                        // update its lockType to a new one
-                        heldLock.lockType = lock.lockType;
-                        for (Lock lockToUpdate : locks) {
-                            if (lockToUpdate.name.equals(lock.name)) {
-                                lockToUpdate.lockType = lock.lockType;
-                            }
+                // if the transaction exists already
+                if (getTransactionLock(lock.transactionNum) != null) {
+                    // if the lock exists in the resource
+                    for (Lock heldLock : locks) {
+                        if (heldLock.transactionNum.equals(lock.transactionNum)) {
+                            // update its lock type to a new one
+                            getTransactionLock(lock.transactionNum).lockType = lock.lockType;
+                            heldLock.lockType = lock.lockType;
                         }
-                        return;
                     }
+                } else {
+                    // lock doesn't exist in the resource
+                    transactionLocks.get(lock.transactionNum).add(lock);
+                    locks.add(lock);
+                    // TODO: <OFFICE HOUR> do I have to update waiting queue?
                 }
-                // if the transaction doesn't have a lock
-                transactionLocks.get(lock.transactionNum).add(lock);
             } else {
                 // if the transactionLocks does not contain the transactionNum
                 // create a new entry for that transaction (order doesn't matter)
                 List<Lock> lockList = new ArrayList<>(Collections.singletonList(lock));
                 transactionLocks.put(lock.transactionNum, lockList);
+                locks.add(lock);
+                // TODO: <OFFICE HOUR> do I have to update waiting queue?
             }
-            getResourceEntry(lock.name).locks.add(lock); // OFFICE HOUR
             return;
         }
 
@@ -117,6 +117,7 @@ public class LockManager {
             // release the lock 'lock'; whenever a lock is updated, update both locks and transactionLocks
             locks.remove(lock);
             transactionLocks.get(lock.transactionNum).remove(lock);
+            getResourceEntry(lock.name).locks.remove(lock);
             processQueue();
             return;
         }
@@ -172,6 +173,19 @@ public class LockManager {
             }
             // if it doesn't, return LockType.NL
             return LockType.NL;
+        }
+
+        /**
+         * Gets the lock `transaction` has on this resource.
+         */
+        public Lock getTransactionLock(long transaction) {
+            // get the lock 'transaction' has on this resource
+            for (Lock heldLock : locks) {
+                if (heldLock.transactionNum.equals(transaction)) {
+                    return heldLock;
+                }
+            }
+            return null;
         }
 
         @Override
@@ -232,7 +246,7 @@ public class LockManager {
          */
         boolean shouldBlock = false;
         synchronized (this) {
-            // TODO: confusing
+            // TODO: OFFICE HOUR confusing
             // in one atomic action
             try {
                 // acquire a 'lockType' lock on 'name', for transaction 'transaction'
@@ -278,7 +292,6 @@ public class LockManager {
             }
             // acquire a 'lockType' lock on 'name', for transaction 'transaction'
             Lock newLock = new Lock(name, lockType, transaction.getTransNum());
-            // TODO: OFFICE HOUR -- what is 'another transaction'
             // if the new lock is not compatible with another transaction's lock on the resource or if there are other transaction in queue for the resource
             if (!resource.checkCompatible(lockType, transaction.getTransNum()) || !resource.waitingQueue.isEmpty()) {
                 // the transaction is blocked and the request is placed at the back of name's queue
@@ -314,14 +327,9 @@ public class LockManager {
             if (getLockType(transaction, name).equals(LockType.NL)) {
                 throw new NoLockHeldException("no lock on 'name' is held by 'transaction'");
             }
-            // TODO: OFFICE HOUR how to fix concurrent modification
-            for (Lock heldLock : resource.locks) {
-                if (heldLock.transactionNum.equals(transaction.getTransNum())) {
-                    resource.releaseLock(heldLock);
-                }
-            }
-            // TODO: finish implementing
-            // idk
+            // Release 'transaction''s lock on 'name'
+            getResourceEntry(name).releaseLock(getLock(transaction, name));
+            // TODO: OFFICE HOUR FOR BELOW...
             /*
              * The resource name's queue should be processed after this call. If any
              * requests in the queue have locks to be released, those should be
@@ -401,6 +409,20 @@ public class LockManager {
         }
         // return the type of lock 'transaction' has on 'name'
         return resource.getTransactionLockType(transaction.getTransNum());
+    }
+
+    /**
+     * Return the lock `transaction` has on `name` or null if no lock is
+     * held.
+     */
+    public synchronized Lock getLock(TransactionContext transaction, ResourceName name) {
+        ResourceEntry resource = getResourceEntry(name);
+        for (Lock heldLock : resource.locks) {
+            if (heldLock.transactionNum.equals(transaction.getTransNum())) {
+                return heldLock;
+            }
+        }
+        return null;
     }
 
     /**

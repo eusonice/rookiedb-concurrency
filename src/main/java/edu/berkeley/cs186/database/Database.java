@@ -931,6 +931,14 @@ public class Database implements AutoCloseable {
         public void close() {
             try {
                 // TODO(proj4_part2)
+                // release all locks the transaction acquired (think of the order to release the locks)
+                // only use LockContext.release and release in reverse order
+                List<Lock> locksToRelease = lockManager.getLocks(getTransaction());
+                Collections.reverse(locksToRelease);
+                for (int i = 0; i < locksToRelease.size(); i++) {
+                    ResourceName name = locksToRelease.get(i).name;
+                    LockContext.fromResourceName(lockManager, name).release(getTransaction());
+                }
                 return;
             } catch (Exception e) {
                 // There's a chance an error message from your release phase

@@ -42,18 +42,18 @@ public class LockUtil {
         LockType explicitLockType = lockContext.getExplicitLockType(transaction);
 
         // break up the logic into two phases
+
         // phase 1: ensure that we have the appropriate locks on ancestors
         // create a helper method that ensures you have the appropriate locks on all ancestors
-        // phase 2: acquiring the lock on the resource
-        // promote in some cases, and escalate in some cases (these cases are not mutually exclusive)
+        if (parentContext != null) {
+            ensureAppropriateAncestorLocks(transaction, parentContext, LockType.parentLock(requestType));
+        }
 
+        // phase 2: acquiring the lock on the resource
         // promote/escalate/acquire as needed but should only grant the least permissive set of locks needed
         // case 1: the current lock type can effectively or explicitly substitute the requested type
         if (LockType.substitutable(effectiveLockType, requestType) || LockType.substitutable(explicitLockType, requestType)) {
             return;
-        }
-        if (parentContext != null) {
-            ensureAppropriateAncestorLocks(transaction, parentContext, LockType.parentLock(requestType));
         }
         // case 2: the current lock type is IX and the requested lock is S, promote to SIX
         if (explicitLockType.equals(LockType.IX) && requestType.equals(LockType.S)) {

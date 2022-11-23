@@ -52,7 +52,7 @@ public class LockUtil {
         // promote in some cases, and escalate in some cases (these cases are not mutually exclusive)
 
         // promote/escalate/acquire as needed but should only grant the least permissive set of locks needed
-        // case 1: the current lock type can effectively substitute the requested type
+        // case 1: the current lock type can effectively or explicitly substitute the requested type
         if (LockType.substitutable(effectiveLockType, requestType) || LockType.substitutable(explicitLockType, requestType)) {
             return;
         }
@@ -66,6 +66,7 @@ public class LockUtil {
         }
         // case 3: the current lock type is an intent lock
         if (explicitLockType.isIntent()) {
+            // https://edstem.org/us/courses/24658/discussion/1994458?comment=4714745
             if (explicitLockType.equals(LockType.IS) && requestType.equals(LockType.X)) {
                 lockContext.promote(transaction, requestType);
             } else {
@@ -92,6 +93,10 @@ public class LockUtil {
             return;
         }
         ensureAppropriateAncestorLocks(transaction, context.parentContext(), LockType.parentLock(requestType));
+        if (context.getExplicitLockType(transaction).equals(LockType.IX) && requestType.equals(LockType.S)) {
+            context.promote(transaction, LockType.SIX);
+            return;
+        }
         if (context.getExplicitLockType(transaction).equals(LockType.NL)) {
             context.acquire(transaction, requestType);
         } else {

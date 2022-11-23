@@ -376,7 +376,7 @@ public class LockContext {
      * Updates numChildLocks recursively for all parent contexts.
      */
     private void updateNumChildLocks(TransactionContext transaction, LockContext context, int num) {
-        if (context == null) {
+        if (transaction == null || context == null) {
             return;
         }
         int numLocks;
